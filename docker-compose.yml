@@ -1,0 +1,115 @@
+services:
+  superset:
+    build:
+      context: .
+    image: superset_firefox
+    container_name: superset_app
+    environment:
+      SUPERSET_SECRET_KEY: "SUPERSET_CHANGE_SECRET_KEY"
+      SUPERSET_DATABASE_URI: "sqlite:////app/superset_home/superset.db"
+      FEATURE_FLAGS_ALERT_REPORTS: "true"
+      ALERT_REPORTS_LOG_RETENTION: "7"
+      CELERY_BROKER_URL: "redis://redis:6379/0"
+      CELERY_RESULT_BACKEND: "redis://redis:6379/0"
+      WEBDRIVER_TYPE: "firefox"
+      PATH: "/usr/bin:$PATH"
+    ports:
+      - "8088:8088"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        pip install pymssql cx_Oracle &&
+        pip install pillow reportlab Flask-Mail flask pandas requests gevent psycopg2 selenium &&
+        superset db upgrade &&
+        superset init &&
+        superset fab create-admin --username admin --firstname Superset --lastname Admin --email murat.akpinar@muratakpinar.com.tr --password admin &&
+        superset run -h 0.0.0.0 -p 8088
+    volumes:
+      - ./execute.py:/app/superset/commands/report/execute.py
+      - ./scheduler.py:/app/superset/tasks/scheduler.py
+      - ./superset/superset_home:/app/superset_home
+      - ./superset_config.py:/app/pythonpath/superset_config.py
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - superset-network
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - superset-network
+
+  celery-worker:
+    image: superset_firefox
+    container_name: celery_worker
+    environment:
+      WEBDRIVER_TYPE: "firefox"
+      PATH: "/usr/bin:$PATH"
+      SUPERSET_CONFIG_PATH: "/app/pythonpath/superset_config.py"
+      CELERY_BROKER_URL: "redis://redis:6379/0"
+      SUPERSET_DATABASE_URI: "sqlite:////app/superset_home/superset.db"
+      CELERY_RESULT_BACKEND: "redis://redis:6379/0"
+      SUPERSET_SECRET_KEY: "SUPERSET_CHANGE_SECRET_KEY"
+      CELERY_BROKER_TRANSPORT_OPTIONS: '{"visibility_timeout": 3600, "retry_on_startup": true}'
+    volumes:
+      - ./execute.py:/app/superset/commands/report/execute.py
+      - ./scheduler.py:/app/superset/tasks/scheduler.py      
+      - ./superset_config.py:/app/pythonpath/superset_config.py
+      - ./superset/superset_home:/app/superset_home
+    command:
+      - /bin/sh
+      - -c
+      - |
+        pip install pillow reportlab Flask-Mail pandas requests flask &&
+        celery --app=superset.tasks.celery_app:app worker --pool=prefork --max-tasks-per-child=128 -Q email_reports,celery --loglevel=DEBUG
+    depends_on:
+      redis:
+        condition: service_healthy
+      superset:
+        condition: service_healthy
+    networks:
+      - superset-network
+
+  celery-beat:
+    image: superset_firefox
+    container_name: celery_beat
+    environment:
+      SUPERSET_CONFIG_PATH: "/app/pythonpath/superset_config.py"
+      CELERY_BROKER_URL: "redis://redis:6379/0"
+      CELERY_RESULT_BACKEND: "redis://redis:6379/0"
+      SUPERSET_DATABASE_URI: "sqlite:////app/superset_home/superset.db"
+      SUPERSET_SECRET_KEY: "SUPERSET_CHANGE_SECRET_KEY"
+      WEBDRIVER_TYPE: "firefox"
+      PATH: "/usr/bin:$PATH"
+    volumes:
+      - ./execute.py:/app/superset/commands/report/execute.py
+      - ./scheduler.py:/app/superset/tasks/scheduler.py
+      - ./superset/superset_home:/app/superset_home
+      - ./superset_config.py:/app/pythonpath/superset_config.py
+    command:
+      - /bin/sh
+      - -c
+      - |
+        pip install pillow reportlab Flask-Mail pandas requests flask &&
+        celery --app=superset.tasks.celery_app:app beat --pidfile /tmp/celerybeat.pid --schedule /tmp/celerybeat-schedule --loglevel=INFO
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - superset-network
+
+networks:
+  superset-network:
+    driver: bridge
