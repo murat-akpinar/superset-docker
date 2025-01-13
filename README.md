@@ -1,3 +1,7 @@
+# Apache Superset
+Apache Superset, güçlü ve açık kaynaklı bir veri keşif ve görselleştirme platformudur. Büyük veri kümelerinizle etkili analizler yapmayı kolaylaştırır.
+
+
 - Secret key oluşturmak için
 ```bash
 # Python komutundan üretilen değeri bir değişkene atayın
@@ -29,6 +33,12 @@ SMTP_USER = "MAIL_USER"
 SMTP_PASSWORD = "MAIL_PW*"
 SMTP_MAIL_FROM = "MAUL_USER"
 EMAIL_REPORTS_SUBJECT_PREFIX = "[Superset] "
+```
+
+- Alert ve Report Özelliği
+mail özelliğini kapatmak isterseniz `docker-compose.yml` dosyasında ki `FEATURE_FLAGS_ALERT_REPORTS` kısmını `FALSE` yapmanız yeterli olacaktır.
+```bash
+FEATURE_FLAGS_ALERT_REPORTS: "true"
 ```
 
 - Docker build alma
