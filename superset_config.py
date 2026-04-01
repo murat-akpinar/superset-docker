@@ -1,10 +1,12 @@
+import os
+
 from celery.schedules import crontab
 
 # Veritabanı URI
 SUPERSET_DATABASE_URI = "sqlite:////app/superset_home/superset.db"
 
-# Superset Secret Key
-SUPERSET_SECRET_KEY = "SUPERSET_CHANGE_SECRET_KEY"
+# docker-compose .env içindeki SUPERSET_SECRET_KEY (konteyner ortamı)
+SUPERSET_SECRET_KEY = os.getenv("SUPERSET_SECRET_KEY", "SUPERSET_CHANGE_SECRET_KEY")
 
 # Feature flags
 FEATURE_FLAGS = {

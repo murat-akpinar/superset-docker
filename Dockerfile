@@ -16,10 +16,22 @@ RUN wget -q https://github.com/mozilla/geckodriver/releases/download/v${GECKODRI
     chmod 755 /usr/bin/geckodriver && \
     rm geckodriver-v${GECKODRIVER_VERSION}-linux64.tar.gz
 
-# Geckodriver'ın PATH'e eklenmesi
-ENV PATH="/usr/bin:$PATH"
+# PATH'e dokunma: apache/superset imajı superset/celery için /app/.venv/bin kullanıyor; sabit PATH onu siliyordu.
+# Geckodriver /usr/bin'de; bu dizin üst imajın PATH'inde zaten var.
 
-# Python bağımlılıklarını yükleyin
-RUN pip install --no-cache-dir gevent psycopg2 redis
+# Python bağımlılıklarını root ile kurun (runtime'da superset kullanıcısı site-packages'a yazamaz)
+RUN pip install --no-cache-dir \
+    gevent psycopg2 redis \
+    pymssql cx_Oracle \
+    pillow reportlab Flask-Mail flask pandas requests selenium
+
+# Bind mount dizinleri host kullanıcısı ile aynı UID/GID görsün (Linux/WSL). Varsayılan 1000:1000.
+# Build: USER_ID=$(id -u) GROUP_ID=$(id -g) docker compose build  veya .env içinde USER_ID/GROUP_ID
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+RUN OLD_UID=$(id -u superset) && OLD_GID=$(id -g superset) && \
+    groupmod -g "${GROUP_ID}" superset && \
+    usermod -u "${USER_ID}" -g "${GROUP_ID}" superset && \
+    find /app /home/superset \( -uid "${OLD_UID}" -o -gid "${OLD_GID}" \) -exec chown "${USER_ID}:${GROUP_ID}" {} + 2>/dev/null || true
 
 USER superset
