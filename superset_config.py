@@ -1,5 +1,6 @@
 import os
 
+from cachelib.redis import RedisCache
 from celery.schedules import crontab
 
 # Veritabanı URI
@@ -115,6 +116,16 @@ DATA_CACHE_CONFIG = {
     "CACHE_REDIS_PASSWORD": REDIS_PASSWORD,
     "CACHE_REDIS_DB": 2,
 }
+
+# Required for SQL Lab async query results storage.
+RESULTS_BACKEND = RedisCache(
+    host=REDIS_HOST,
+    port=REDIS_PORT,
+    password=REDIS_PASSWORD or None,
+    db=4,
+    default_timeout=3600,
+    key_prefix="superset_results_",
+)
 
 # Screenshot configuration
 SCREENSHOT_LOCATE_WAIT = 100
