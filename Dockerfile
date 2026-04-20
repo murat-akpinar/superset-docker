@@ -2,7 +2,7 @@ FROM apache/superset:latest
 USER root
 RUN apt update && \
     apt-get install --no-install-recommends -y \
-    firefox-esr wget tar build-essential libpq-dev gcc sqlite3 && \
+    firefox-esr wget tar build-essential libpq-dev gcc sqlite3 gettext && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -30,5 +30,10 @@ RUN OLD_UID=$(id -u superset) && OLD_GID=$(id -g superset) && \
     groupmod -g "${GROUP_ID}" superset && \
     usermod -u "${USER_ID}" -g "${GROUP_ID}" superset && \
     find /app /home/superset \( -uid "${OLD_UID}" -o -gid "${OLD_GID}" \) -exec chown "${USER_ID}:${GROUP_ID}" {} + 2>/dev/null || true
+
+COPY ./translations /app/pythonpath/translations
+RUN chown -R superset:superset /app/pythonpath/translations && \
+    chmod -R a+rX /app/pythonpath/translations && \
+    find /app/pythonpath/translations -name "messages.po" -exec sh -c 'msgfmt "$1" -o "${1%.po}.mo"' _ {} \;
 
 USER superset

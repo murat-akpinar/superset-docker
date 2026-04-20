@@ -8,15 +8,34 @@ SUPERSET_DATABASE_URI = "sqlite:////app/superset_home/superset.db"
 # docker-compose .env içindeki SUPERSET_SECRET_KEY (konteyner ortamı)
 SUPERSET_SECRET_KEY = os.getenv("SUPERSET_SECRET_KEY", "SUPERSET_CHANGE_SECRET_KEY")
 
+
+def _async_jwt_secret() -> str:
+    """
+    Superset async query manager requires a JWT secret >= 32 chars.
+    Prefer explicit env var; fallback to SUPERSET_SECRET_KEY.
+    """
+    secret = os.getenv("GLOBAL_ASYNC_QUERIES_JWT_SECRET", SUPERSET_SECRET_KEY)
+    if len(secret) < 32:
+        secret = f"{secret}{'0' * 32}"[:32]
+    return secret
+
 # Feature flags
 FEATURE_FLAGS = {
     "ALERT_REPORTS": True,
     "ALERT_REPORTS_NOTIFICATION_DRY_RUN": False,
+    "GLOBAL_ASYNC_QUERIES": True,
 }
+GLOBAL_ASYNC_QUERIES_JWT_SECRET = _async_jwt_secret()
 
 # Timeout settings
-SQLLAB_TIMEOUT = 300
+# Keep SQL Lab jobs alive longer in async worker.
+SQLLAB_TIMEOUT = 600
 SUPERSET_WEBSERVER_TIMEOUT = 300
+SQLLAB_ASYNC_TIME_LIMIT_SEC = 900
+SQLLAB_FORCE_RUN_ASYNC = True
+
+# Keep interactive payloads lean by default.
+DEFAULT_SQLLAB_LIMIT = 1000
 
 # Row limit settings
 ROW_LIMIT = 500000
@@ -32,6 +51,10 @@ REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 def _redis_uri(db: int) -> str:
     auth = f":{REDIS_PASSWORD}@" if REDIS_PASSWORD else ""
     return f"redis://{auth}{REDIS_HOST}:{REDIS_PORT}/{db}"
+
+
+# Use Redis for Flask-Limiter storage in production.
+RATELIMIT_STORAGE_URI = _redis_uri(3)
 
 # Celery configuration
 class CeleryConfig:
@@ -85,7 +108,7 @@ EXPLORE_FORM_DATA_CACHE_CONFIG = {
 
 DATA_CACHE_CONFIG = {
     "CACHE_TYPE": "RedisCache",
-    "CACHE_DEFAULT_TIMEOUT": 300,
+    "CACHE_DEFAULT_TIMEOUT": 900,
     "CACHE_KEY_PREFIX": "superset_data_",
     "CACHE_REDIS_HOST": REDIS_HOST,
     "CACHE_REDIS_PORT": REDIS_PORT,
@@ -125,3 +148,11 @@ WEBDRIVER_WINDOW = {
     "slice": (1280, 1024),
     "dashboard": (1920, 1080),
 }
+
+# Locale settings (UI language availability depends on Superset build/version).
+BABEL_DEFAULT_LOCALE = "tr"
+LANGUAGES = {
+    "en": {"flag": "us", "name": "English"},
+    "tr": {"flag": "tr", "name": "Turkish"},
+}
+BABEL_TRANSLATION_DIRECTORIES = "/app/pythonpath/translations"

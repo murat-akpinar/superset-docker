@@ -1,5 +1,3 @@
-# .env: Compose ${VAR} yerleştirmesi + env_file. Dosya docker-compose.yml ile aynı dizinde olmalı.
-
 services:
   superset:
     build:
@@ -27,7 +25,7 @@ services:
       - |
         superset db upgrade &&
         superset init &&
-        superset fab create-admin --username admin --firstname Superset --lastname Admin --email murat.akpinar@muratakpinar.com.tr --password admin &&
+        (superset fab create-admin --username admin --firstname Superset --lastname Admin --email murat.akpinar@muratakpinar.com.tr --password admin || true) &&
         superset run -h 0.0.0.0 -p 8088
     volumes:
       - ./execute.py:/app/superset/commands/report/execute.py
@@ -84,7 +82,7 @@ services:
       - /bin/sh
       - -c
       - |
-        celery --app=superset.tasks.celery_app:app worker --pool=prefork --max-tasks-per-child=128 -Q email_reports,celery --loglevel=DEBUG
+        celery --app=superset.tasks.celery_app:app worker --pool=prefork --max-tasks-per-child=128 -Q email_reports,celery,sql_lab --loglevel=DEBUG
     depends_on:
       redis:
         condition: service_healthy
