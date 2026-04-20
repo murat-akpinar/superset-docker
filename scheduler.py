@@ -19,8 +19,9 @@ from datetime import datetime, timezone
 
 from celery import Celery
 from celery.exceptions import SoftTimeLimitExceeded
+from flask import current_app
 
-from superset import app, is_feature_enabled
+from superset import is_feature_enabled
 from superset.commands.exceptions import CommandException
 from superset.commands.report.exceptions import ReportScheduleUnexpectedError
 from superset.commands.report.execute import AsyncExecuteReportScheduleCommand
@@ -41,7 +42,7 @@ def scheduler() -> None:
     """
     Celery beat main scheduler for reports
     """
-    stats_logger: BaseStatsLogger = app.config["STATS_LOGGER"]
+    stats_logger: BaseStatsLogger = current_app.config["STATS_LOGGER"]
     stats_logger.incr("reports.scheduler")
 
     if not is_feature_enabled("ALERT_REPORTS"):
@@ -49,7 +50,7 @@ def scheduler() -> None:
     active_schedules = ReportScheduleDAO.find_active()
     triggered_at = (
         datetime.fromisoformat(scheduler.request.expires)
-        - app.config["CELERY_BEAT_SCHEDULER_EXPIRES"]
+        - current_app.config["CELERY_BEAT_SCHEDULER_EXPIRES"]
         if scheduler.request.expires
         else datetime.now(tz=timezone.utc)
     )
@@ -61,22 +62,22 @@ def scheduler() -> None:
             async_options = {"eta": schedule}
             if (
                 active_schedule.working_timeout is not None
-                and app.config["ALERT_REPORTS_WORKING_TIME_OUT_KILL"]
+                and current_app.config["ALERT_REPORTS_WORKING_TIME_OUT_KILL"]
             ):
                 async_options["time_limit"] = (
                     active_schedule.working_timeout
-                    + app.config["ALERT_REPORTS_WORKING_TIME_OUT_LAG"]
+                    + current_app.config["ALERT_REPORTS_WORKING_TIME_OUT_LAG"]
                 )
                 async_options["soft_time_limit"] = (
                     active_schedule.working_timeout
-                    + app.config["ALERT_REPORTS_WORKING_SOFT_TIME_OUT_LAG"]
+                    + current_app.config["ALERT_REPORTS_WORKING_SOFT_TIME_OUT_LAG"]
                 )
             execute.apply_async((active_schedule.id,), **async_options)
 
 
 @celery_app.task(name="reports.execute", bind=True)
 def execute(self: Celery.task, report_schedule_id: int) -> None:
-    stats_logger: BaseStatsLogger = app.config["STATS_LOGGER"]
+    stats_logger: BaseStatsLogger = current_app.config["STATS_LOGGER"]
     stats_logger.incr("reports.execute")
 
     task_id = None
@@ -111,7 +112,7 @@ def execute(self: Celery.task, report_schedule_id: int) -> None:
 
 @celery_app.task(name="reports.prune_log")
 def prune_log() -> None:
-    stats_logger: BaseStatsLogger = app.config["STATS_LOGGER"]
+    stats_logger: BaseStatsLogger = current_app.config["STATS_LOGGER"]
     stats_logger.incr("reports.prune_log")
 
     try:
@@ -124,7 +125,7 @@ def prune_log() -> None:
 
 @celery_app.task(name="prune_query")
 def prune_query() -> None:
-    stats_logger: BaseStatsLogger = app.config["STATS_LOGGER"]
+    stats_logger: BaseStatsLogger = current_app.config["STATS_LOGGER"]
     stats_logger.incr("prune_query")
 
     try:
@@ -133,42 +134,3 @@ def prune_query() -> None:
         ).run()
     except CommandException as ex:
         logger.exception("An error occurred while pruning queries: %s", ex)
-
-
-
-
-
-@celery_app.task(name="reports.execute", bind=True)
-def execute(self: Celery.task, report_schedule_id: int) -> None:
-    stats_logger: BaseStatsLogger = app.config["STATS_LOGGER"]
-    stats_logger.incr("reports.execute")
-
-    task_id = None
-    try:
-        task_id = execute.request.id
-        scheduled_dttm = execute.request.eta
-        if isinstance(scheduled_dttm, str):
-            scheduled_dttm = datetime.fromisoformat(scheduled_dttm)  # ISO formatına çevir
-        logger.info(
-            "Executing alert/report, task id: %s, scheduled_dttm: %s",
-            task_id,
-            scheduled_dttm,
-        )
-        AsyncExecuteReportScheduleCommand(
-            task_id,
-            report_schedule_id,
-            scheduled_dttm,
-        ).run()
-    except Exception as ex:
-        logger.exception("An error occurred while executing the report: %s", ex)
-        raise
-
-from datetime import datetime
-
-def ensure_datetime(value):
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value)
-        except ValueError:
-            raise TypeError(f"Invalid datetime format: {value}")
-    return value

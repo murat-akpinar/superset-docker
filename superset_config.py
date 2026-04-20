@@ -14,14 +14,29 @@ FEATURE_FLAGS = {
     "ALERT_REPORTS_NOTIFICATION_DRY_RUN": False,
 }
 
+# Timeout settings
+SQLLAB_TIMEOUT = 300
+SUPERSET_WEBSERVER_TIMEOUT = 300
+
+# Row limit settings
+ROW_LIMIT = 500000
+SQL_MAX_ROW = 500000
+DISPLAY_MAX_ROW = 500000
+
 # Redis configuration
 REDIS_HOST = "redis"
-REDIS_PORT = "6379"
+REDIS_PORT = 6379
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
+
+
+def _redis_uri(db: int) -> str:
+    auth = f":{REDIS_PASSWORD}@" if REDIS_PASSWORD else ""
+    return f"redis://{auth}{REDIS_HOST}:{REDIS_PORT}/{db}"
 
 # Celery configuration
 class CeleryConfig:
-    result_backend = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
-    broker_url = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
+    result_backend = _redis_uri(0)
+    broker_url = _redis_uri(0)
     imports = (
         "superset.sql_lab",
         "superset.tasks.scheduler",
@@ -47,6 +62,37 @@ class CeleryConfig:
 # Celery yapılandırması
 CELERY_CONFIG = CeleryConfig
 
+# Cache configuration
+FILTER_STATE_CACHE_CONFIG = {
+    "CACHE_TYPE": "RedisCache",
+    "CACHE_DEFAULT_TIMEOUT": 86400,
+    "CACHE_KEY_PREFIX": "superset_filter_",
+    "CACHE_REDIS_HOST": REDIS_HOST,
+    "CACHE_REDIS_PORT": REDIS_PORT,
+    "CACHE_REDIS_PASSWORD": REDIS_PASSWORD,
+    "CACHE_REDIS_DB": 1,
+}
+
+EXPLORE_FORM_DATA_CACHE_CONFIG = {
+    "CACHE_TYPE": "RedisCache",
+    "CACHE_DEFAULT_TIMEOUT": 86400,
+    "CACHE_KEY_PREFIX": "superset_explore_",
+    "CACHE_REDIS_HOST": REDIS_HOST,
+    "CACHE_REDIS_PORT": REDIS_PORT,
+    "CACHE_REDIS_PASSWORD": REDIS_PASSWORD,
+    "CACHE_REDIS_DB": 1,
+}
+
+DATA_CACHE_CONFIG = {
+    "CACHE_TYPE": "RedisCache",
+    "CACHE_DEFAULT_TIMEOUT": 300,
+    "CACHE_KEY_PREFIX": "superset_data_",
+    "CACHE_REDIS_HOST": REDIS_HOST,
+    "CACHE_REDIS_PORT": REDIS_PORT,
+    "CACHE_REDIS_PASSWORD": REDIS_PASSWORD,
+    "CACHE_REDIS_DB": 2,
+}
+
 # Screenshot configuration
 SCREENSHOT_LOCATE_WAIT = 100
 SCREENSHOT_LOAD_WAIT = 600
@@ -60,7 +106,7 @@ SMTP_SSL_SERVER_AUTH = True
 SMTP_SSL = False
 SMTP_USER = "MAIL_USER"
 SMTP_PASSWORD = "MAIL_PW*"
-SMTP_MAIL_FROM = "MAUL_USER"
+SMTP_MAIL_FROM = "MAIL_USER"
 EMAIL_REPORTS_SUBJECT_PREFIX = "[Superset] "
 
 # WebDriver configuration
@@ -79,9 +125,3 @@ WEBDRIVER_WINDOW = {
     "slice": (1280, 1024),
     "dashboard": (1920, 1080),
 }
-SCREENSHOT_LOCATE_WAIT = 100
-SCREENSHOT_LOAD_WAIT = 600
-
-# WebDriver connection settings
-WEBDRIVER_BASEURL = "http://superset_app:8088"
-WEBDRIVER_BASEURL_USER_FRIENDLY = "http://localhost:8088"
